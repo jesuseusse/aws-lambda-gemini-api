@@ -1,0 +1,76 @@
+name: Deploy Lambda Gemini API
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  STACK_NAME: ${{ vars.AWS_STACK_NAME }}
+  LAMBDA_FUNCTION_NAME: ${{ vars.LAMBDA_FUNCTION_NAME }}
+  GOOGLE_API_KEY_PARAM: ${{ secrets.SSM_PARAMETER_NAME }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Install SAM CLI
+        uses: aws-actions/setup-sam@v2
+
+      - name: Build with SAM
+        run: sam build --cached --parallel
+
+      - name: Deploy with SAM
+        env:
+          RESOLVED_STACK_NAME: ${{ env.STACK_NAME }}
+          RESOLVED_LAMBDA_NAME: ${{ env.LAMBDA_FUNCTION_NAME }}
+          RESOLVED_PARAM: ${{ env.GOOGLE_API_KEY_PARAM }}
+        run: |
+          STACK_NAME=${RESOLVED_STACK_NAME:-lambda-gemini-api}
+          LAMBDA_FUNCTION_NAME=${RESOLVED_LAMBDA_NAME:-lambda-gemini-api}
+          GOOGLE_API_KEY_PARAM=${RESOLVED_PARAM}
+
+          if [ -z "$GOOGLE_API_KEY_PARAM" ]; then
+            echo "❌ Debes definir el secreto SSM_PARAMETER_NAME con el nombre del parámetro en SSM" >&2
+            exit 1
+          fi
+
+          sam deploy \
+            --stack-name "$STACK_NAME" \
+            --capabilities CAPABILITY_IAM \
+            --resolve-s3 \
+            --s3-prefix lambda-gemini-api \
+            --parameter-overrides \
+                GoogleApiKeyParameterName="$GOOGLE_API_KEY_PARAM" \
+                LambdaFunctionName="$LAMBDA_FUNCTION_NAME" \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset
