@@ -13,7 +13,7 @@ import google.generativeai as genai
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 
-DEFAULT_MODEL = "gemini-1.5-pro-latest"
+DEFAULT_MODEL = "gemini-1.5-flash-latest"
 DEFAULT_MIME_TYPE = "image/png"
 ALLOWED_RESPONSE_MIME_TYPES = {
     "text/plain",
