@@ -15,6 +15,13 @@ LOGGER.setLevel(logging.INFO)
 
 DEFAULT_MODEL = "imagen-3"
 DEFAULT_MIME_TYPE = "image/png"
+ALLOWED_RESPONSE_MIME_TYPES = {
+    "text/plain",
+    "application/json",
+    "application/xml",
+    "application/yaml",
+    "text/x.enum"
+}
 
 _SSM_CLIENT = boto3.client("ssm")
 _CACHED_API_KEY: Optional[str] = None
@@ -141,13 +148,14 @@ def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, 
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel(model_name)
 
-        generation_config = {"response_mime_type": mime_type}
-        request_contents = [{"role": "user", "parts": parts}]
+        request_kwargs = {
+            "contents": [{"role": "user", "parts": parts}]
+        }
 
-        result = model.generate_content(
-            contents=request_contents,
-            generation_config=generation_config
-        )
+        if mime_type in ALLOWED_RESPONSE_MIME_TYPES:
+            request_kwargs["generation_config"] = {"response_mime_type": mime_type}
+
+        result = model.generate_content(**request_kwargs)
 
         images = _extract_images(result)
         if not images:
