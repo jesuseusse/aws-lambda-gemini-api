@@ -68,7 +68,7 @@ Resources:
       Action: lambda:InvokeFunction
       FunctionName: !Ref GeminiImageFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/generate-image
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/*/generate-image
 
 Outputs:
   ApiEndpoint:
