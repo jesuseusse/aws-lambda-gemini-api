@@ -17,7 +17,7 @@ Globals:
     Timeout: 30
     MemorySize: 512
     Handler: src/app.lambda_handler
-    Architecture:
+    Architectures:
       - arm64
     Environment:
       Variables:
