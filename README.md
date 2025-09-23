@@ -31,7 +31,7 @@ AWS Lambda function written in Python that receives a `prompt` and generates ima
 
 ## Project structure
 
-- `src/app.py`: Lambda handler that fetches the Gemini API key from SSM, calls Gemini, and returns images in base64
+- `src/app.py`: Lambda handler that fetches the Gemini API key from SSM, calls Gemini, and returns images in base64 (defaults to the `gemini-2.5-pro` model when none is provided)
 - `template.yaml`: SAM template to deploy the function and expose an HTTP endpoint
 - `.github/workflows/deploy.yaml`: workflow that runs tests and deploys with SAM
 - `requirements.txt`: production dependencies packaged with the function
@@ -67,7 +67,8 @@ During execution the Lambda reads the parameter name from the environment variab
 ```json
 {
   "prompt": "A futuristic sunset landscape in digital illustration style",
-  "mimeType": "image/png"
+  "mimeType": "image/png",
+  "model": "gemini-2.5-pro"
 }
 ```
 

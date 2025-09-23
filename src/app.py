@@ -13,7 +13,7 @@ import google.generativeai as genai
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 
-DEFAULT_MODEL = "gemini-1.5-flash-latest"
+DEFAULT_MODEL = "gemini-2.5-pro"
 DEFAULT_MIME_TYPE = "image/png"
 ALLOWED_RESPONSE_MIME_TYPES = {
     "text/plain",
@@ -162,7 +162,10 @@ def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, 
             LOGGER.error("La respuesta de Gemini no contiene imágenes")
             return _build_response(502, {"message": "Gemini no generó imágenes para el prompt proporcionado"})
 
-        return _build_response(200, {"images": [image.as_dict() for image in images]})
+        return _build_response(200, {
+            "model": model_name,
+            "images": [image.as_dict() for image in images]
+        })
 
     except BadRequestError as error:
         LOGGER.warning("Solicitud inválida: %s", error)

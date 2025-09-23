@@ -110,6 +110,7 @@ def test_successful_generation_returns_images(app_module, mock_genai, mock_boto3
     payload = json.loads(response["body"])
 
     assert response["statusCode"] == 200
+    assert payload["model"] == "gemini-2.5-pro"
     assert payload["images"] == [{"mimeType": "image/png", "data": "base64img"}]
     mock_genai["genai"].configure.assert_called_once_with(api_key="fake-key")
     mock_boto3["boto3"].client.assert_called_once_with("ssm")
@@ -128,6 +129,18 @@ def test_generation_config_applied_for_allowed_mimetype(app_module, mock_genai, 
 
     _, kwargs = mock_genai["model_instance"].generate_content.call_args
     assert kwargs["generation_config"] == {"response_mime_type": "application/json"}
+
+
+def test_custom_model_is_used_when_provided(app_module, mock_genai, mock_boto3, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_PARAM", "/prod/key")
+    mock_boto3["client"].get_parameter.return_value = {"Parameter": {"Value": "fake-key"}}
+
+    app_module.lambda_handler(_build_event({
+        "prompt": "Render a forest",
+        "model": "gemini-1.5-pro-latest"
+    }), None)
+
+    mock_genai["genai"].GenerativeModel.assert_called_with("gemini-1.5-pro-latest")
 
 
 def test_no_images_returns_502(app_module, mock_genai, mock_boto3, monkeypatch):
