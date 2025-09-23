@@ -1,16 +1,18 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
-Description: Lambda que genera imágenes usando Google Gemini (Python).
+Description: AWS Lambda that generates images using Google Gemini (Python).
 
+# Parameters capture values that may vary across environments or deployments.
 Parameters:
   GoogleApiKeyParameterName:
     Type: String
-    Description: Nombre del parámetro seguro en AWS Systems Manager Parameter Store que contiene la API key de Gemini.
+    Description: Secure parameter name in AWS Systems Manager Parameter Store that stores the Gemini API key.
   LambdaFunctionName:
     Type: String
     Default: lambda-gemini-api
-    Description: Nombre que tendrá la función Lambda.
+    Description: Name to assign to the Lambda function.
 
+# Globals define defaults applied to every AWS::Serverless::Function in this template.
 Globals:
   Function:
     Runtime: python3.12
@@ -28,19 +30,32 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Ref LambdaFunctionName
-      Description: Genera imágenes con Gemini usando prompts personalizados.
+      Description: Generates images with Gemini based on custom prompts.
       CodeUri: .
+      # Inline policies allow the function to read the secure parameter and decrypt it with the managed SSM key.
       Policies:
-        - SSMParameterReadPolicy:
-            ParameterName: !Ref GoogleApiKeyParameterName
+        - Statement:
+            Effect: Allow
+            Action:
+              - ssm:GetParameter
+              - ssm:GetParameters
+              - ssm:GetParameterHistory
+            Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${GoogleApiKeyParameterName}
+        - Statement:
+            Effect: Allow
+            Action:
+              - kms:Decrypt
+            Resource: !Sub arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/ssm
       Events:
         ApiRequest:
           Type: Api
           Properties:
+            # Expose a POST endpoint so API Gateway can trigger the Lambda with user prompts.
             Path: /generate-image
             Method: post
 
 Outputs:
   ApiEndpoint:
-    Description: Endpoint expuesto por API Gateway para invocar la función.
+    Description: API Gateway endpoint to invoke the function.
+    # Expose the HTTPS URL created by API Gateway so clients can consume the service.
     Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate-image"
