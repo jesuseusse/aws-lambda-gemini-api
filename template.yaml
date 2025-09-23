@@ -22,9 +22,6 @@ Globals:
     Environment:
       Variables:
         GOOGLE_API_KEY: !Sub "{{resolve:ssm-secure:${GoogleApiKeyParameterName}:1}}"
-    Policies:
-      - SSMParameterReadPolicy:
-          ParameterName: !Ref GoogleApiKeyParameterName
 
 Resources:
   GeminiImageFunction:
@@ -33,6 +30,9 @@ Resources:
       FunctionName: !Ref LambdaFunctionName
       Description: Genera imágenes con Gemini usando prompts personalizados.
       CodeUri: .
+      Policies:
+        - SSMParameterReadPolicy:
+            ParameterName: !Ref GoogleApiKeyParameterName
       Events:
         ApiRequest:
           Type: Api
