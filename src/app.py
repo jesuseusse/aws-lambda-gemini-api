@@ -13,15 +13,8 @@ import google.generativeai as genai
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 
-DEFAULT_MODEL = "gemini-2.5-pro"
+DEFAULT_MODEL = "gemini-2.5-flash-image-preview" # or gemini-1.5-pro
 DEFAULT_MIME_TYPE = "image/png"
-ALLOWED_RESPONSE_MIME_TYPES = {
-    "text/plain",
-    "application/json",
-    "application/xml",
-    "application/yaml",
-    "text/x.enum"
-}
 
 _SSM_CLIENT = boto3.client("ssm")
 _CACHED_API_KEY: Optional[str] = None
@@ -82,13 +75,6 @@ def _resolve_model(payload: Dict[str, Any]) -> str:
     return DEFAULT_MODEL
 
 
-def _resolve_mime_type(payload: Dict[str, Any]) -> str:
-    mime_type = payload.get("mimeType") or payload.get("mime_type")
-    if isinstance(mime_type, str) and mime_type.strip():
-        return mime_type.strip()
-    return DEFAULT_MIME_TYPE
-
-
 def _build_content_parts(prompt: str, payload: Dict[str, Any]) -> List[Dict[str, str]]:
     parts = [{"text": prompt}]
     negative_prompt = payload.get("negativePrompt") or payload.get("negative_prompt")
@@ -142,7 +128,6 @@ def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, 
         payload = _parse_body(event)
         prompt = _extract_prompt(payload)
         model_name = _resolve_model(payload)
-        mime_type = _resolve_mime_type(payload)
         parts = _build_content_parts(prompt, payload)
 
         genai.configure(api_key=api_key)
@@ -151,9 +136,6 @@ def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, 
         request_kwargs = {
             "contents": [{"role": "user", "parts": parts}]
         }
-
-        if mime_type in ALLOWED_RESPONSE_MIME_TYPES:
-            request_kwargs["generation_config"] = {"response_mime_type": mime_type}
 
         result = model.generate_content(**request_kwargs)
 

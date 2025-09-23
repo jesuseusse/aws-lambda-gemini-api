@@ -67,7 +67,6 @@ During execution the Lambda reads the parameter name from the environment variab
 ```json
 {
   "prompt": "A futuristic sunset landscape in digital illustration style",
-  "mimeType": "image/png",
   "model": "gemini-2.5-pro"
 }
 ```
