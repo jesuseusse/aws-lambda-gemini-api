@@ -11,7 +11,7 @@ import google.generativeai as genai
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
 
-DEFAULT_MODEL = "gemini-1.5-flash-latest"
+DEFAULT_MODEL = "imagen-3"
 DEFAULT_MIME_TYPE = "image/png"
 
 
@@ -36,27 +36,22 @@ def _build_response(status_code: int, payload: Dict[str, Any]) -> Dict[str, Any]
     }
 
 
+
 def _parse_body(event: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not event:
-        return {}
+        raise BadRequestError("El evento de la solicitud está vacío")
 
     body = event.get("body")
-    if body is None:
-        # Support direct invocation where the event already contains the payload.
-        return {key: value for key, value in event.items() if key != "headers"}
-
-    if isinstance(body, dict):
-        return body
-
     if isinstance(body, str):
         if not body:
-            return {}
+            raise BadRequestError("El cuerpo de la solicitud está vacío")
         try:
             return json.loads(body)
-        except json.JSONDecodeError as exc:  # pragma: no cover - protects future refactor
+        except json.JSONDecodeError as exc:
             raise BadRequestError("El cuerpo de la solicitud no es un JSON válido") from exc
 
     raise BadRequestError("Formato de cuerpo no soportado")
+
 
 
 def _extract_prompt(payload: Dict[str, Any]) -> str:
