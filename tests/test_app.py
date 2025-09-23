@@ -37,7 +37,33 @@ def mock_genai():
 
 
 @pytest.fixture()
-def app_module(mock_genai):
+def mock_boto3():
+    boto3_module = types.ModuleType("boto3")
+    client_instance = MagicMock()
+    boto3_module.client = MagicMock(return_value=client_instance)
+
+    botocore_module = types.ModuleType("botocore")
+    exceptions_module = types.ModuleType("botocore.exceptions")
+    exceptions_module.BotoCoreError = Exception
+    exceptions_module.ClientError = Exception
+    botocore_module.exceptions = exceptions_module
+
+    sys.modules["boto3"] = boto3_module
+    sys.modules["botocore"] = botocore_module
+    sys.modules["botocore.exceptions"] = exceptions_module
+
+    yield {
+        "boto3": boto3_module,
+        "client": client_instance
+    }
+
+    sys.modules.pop("boto3", None)
+    sys.modules.pop("botocore.exceptions", None)
+    sys.modules.pop("botocore", None)
+
+
+@pytest.fixture()
+def app_module(mock_genai, mock_boto3):
     sys.modules.pop("src.app", None)
     module = importlib.import_module("src.app")
     return module
@@ -48,26 +74,29 @@ def _build_event(body):
 
 
 def test_missing_api_key_returns_500(app_module, monkeypatch):
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_API_KEY_PARAM", raising=False)
     response = app_module.lambda_handler(_build_event({"prompt": "hola"}), None)
     assert response["statusCode"] == 500
-    assert "GOOGLE_API_KEY" in json.loads(response["body"])['message']
+    assert "API key" in json.loads(response["body"])['message']
 
 
-def test_invalid_json_returns_400(app_module, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+def test_invalid_json_returns_400(app_module, mock_boto3, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_PARAM", "/prod/key")
+    mock_boto3["client"].get_parameter.return_value = {"Parameter": {"Value": "fake-key"}}
     response = app_module.lambda_handler({"body": "{invalid"}, None)
     assert response["statusCode"] == 400
 
 
-def test_missing_prompt_returns_400(app_module, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+def test_missing_prompt_returns_400(app_module, mock_boto3, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_PARAM", "/prod/key")
+    mock_boto3["client"].get_parameter.return_value = {"Parameter": {"Value": "fake-key"}}
     response = app_module.lambda_handler(_build_event({}), None)
     assert response["statusCode"] == 400
 
 
-def test_successful_generation_returns_images(app_module, mock_genai, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+def test_successful_generation_returns_images(app_module, mock_genai, mock_boto3, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_PARAM", "/prod/key")
+    mock_boto3["client"].get_parameter.return_value = {"Parameter": {"Value": "fake-key"}}
 
     inline_data = SimpleNamespace(data="base64img", mime_type="image/png")
     part = SimpleNamespace(inline_data=inline_data)
@@ -83,17 +112,19 @@ def test_successful_generation_returns_images(app_module, mock_genai, monkeypatc
     assert response["statusCode"] == 200
     assert payload["images"] == [{"mimeType": "image/png", "data": "base64img"}]
     mock_genai["genai"].configure.assert_called_once_with(api_key="fake-key")
+    mock_boto3["boto3"].client.assert_called_once_with("ssm")
+    mock_boto3["client"].get_parameter.assert_called_once_with(Name="/prod/key", WithDecryption=True)
 
 
-def test_no_images_returns_502(app_module, mock_genai, monkeypatch):
-    monkeypatch.setenv("GOOGLE_API_KEY", "fake-key")
+def test_no_images_returns_502(app_module, mock_genai, mock_boto3, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_PARAM", "/prod/key")
+    mock_boto3["client"].get_parameter.return_value = {"Parameter": {"Value": "fake-key"}}
 
     empty_content = SimpleNamespace(parts=[])
     candidate = SimpleNamespace(content=empty_content)
     result = SimpleNamespace(candidates=[candidate])
 
     mock_genai["model_instance"].generate_content.return_value = result
-
     response = app_module.lambda_handler(_build_event({"prompt": "Un paisaje"}), None)
 
     assert response["statusCode"] == 502

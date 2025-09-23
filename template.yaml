@@ -21,7 +21,7 @@ Globals:
       - arm64
     Environment:
       Variables:
-        GOOGLE_API_KEY: !Sub "{{resolve:ssm-secure:${GoogleApiKeyParameterName}:1}}"
+        GOOGLE_API_KEY_PARAM: !Ref GoogleApiKeyParameterName
 
 Resources:
   GeminiImageFunction:

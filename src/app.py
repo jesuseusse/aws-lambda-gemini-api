@@ -6,6 +6,8 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 import google.generativeai as genai
 
 LOGGER = logging.getLogger(__name__)
@@ -13,6 +15,9 @@ LOGGER.setLevel(logging.INFO)
 
 DEFAULT_MODEL = "imagen-3"
 DEFAULT_MIME_TYPE = "image/png"
+
+_SSM_CLIENT = boto3.client("ssm")
+_CACHED_API_KEY: Optional[str] = None
 
 
 class BadRequestError(Exception):
@@ -100,12 +105,31 @@ def _extract_images(result: Any) -> List[ImagePayload]:
     return images
 
 
+def _get_api_key() -> Optional[str]:
+    global _CACHED_API_KEY
+
+    if _CACHED_API_KEY:
+        return _CACHED_API_KEY
+
+    parameter_name = os.environ.get("GOOGLE_API_KEY_PARAM")
+    if not parameter_name:
+        LOGGER.error("GOOGLE_API_KEY_PARAM no está configurada")
+        return None
+
+    try:
+        response = _SSM_CLIENT.get_parameter(Name=parameter_name, WithDecryption=True)
+        _CACHED_API_KEY = response["Parameter"]["Value"]
+        return _CACHED_API_KEY
+    except (BotoCoreError, ClientError) as error:
+        LOGGER.exception("No se pudo obtener la API key desde SSM", exc_info=error)
+        return None
+
+
 def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, Any]:
     """Entry point for the AWS Lambda runtime."""
-    api_key = os.environ.get("GOOGLE_API_KEY")
+    api_key = _get_api_key()
     if not api_key:
-        LOGGER.error("GOOGLE_API_KEY no está configurada")
-        return _build_response(500, {"message": "Configuración ausente: GOOGLE_API_KEY"})
+        return _build_response(500, {"message": "No se pudo obtener la API key de Gemini"})
 
     try:
         payload = _parse_body(event)
