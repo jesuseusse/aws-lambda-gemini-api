@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -40,6 +41,22 @@ def _build_response(status_code: int, payload: Dict[str, Any]) -> Dict[str, Any]
         "body": json.dumps(payload)
     }
 
+
+def _derive_status_code_from_exception(error: Exception) -> Optional[int]:
+    for attr in ("code", "status_code", "status", "http_status"):
+        value = getattr(error, attr, None)
+        if isinstance(value, int):
+            return value
+
+    message = str(error).strip()
+    match = re.match(r"^(\d{3})\b", message)
+    if match:
+        try:
+            return int(match.group(1))
+        except ValueError:  # pragma: no cover - defensive guard
+            return None
+
+    return None
 
 
 def _parse_body(event: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -154,4 +171,12 @@ def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, 
         return _build_response(400, {"message": str(error)})
     except Exception as error:  # pragma: no cover - cubierta con logging y manejo genérico
         LOGGER.exception("Error generando imagen")
-        return _build_response(502, {"message": "Error al generar la imagen", "detail": str(error)})
+        status_code = _derive_status_code_from_exception(error) or 502
+        message = str(error)
+        payload: Dict[str, Any] = {"message": message}
+
+        detail = getattr(error, "details", None)
+        if isinstance(detail, str) and detail.strip() and detail.strip() != message:
+            payload["detail"] = detail.strip()
+
+        return _build_response(status_code, payload)
