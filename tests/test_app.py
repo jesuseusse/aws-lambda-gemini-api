@@ -110,7 +110,7 @@ def test_successful_generation_returns_images(app_module, mock_genai, mock_boto3
     payload = json.loads(response["body"])
 
     assert response["statusCode"] == 200
-    assert payload["model"] == "gemini-2.5-pro"
+    assert payload["model"] == app_module.DEFAULT_MODEL
     assert payload["images"] == [{"mimeType": "image/png", "data": "base64img"}]
     mock_genai["genai"].configure.assert_called_once_with(api_key="fake-key")
     mock_boto3["boto3"].client.assert_called_once_with("ssm")
