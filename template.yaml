@@ -26,6 +26,13 @@ Globals:
         GOOGLE_API_KEY_PARAM: !Ref GoogleApiKeyParameterName
 
 Resources:
+  RestApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      Auth:
+        DefaultAuthorizer: AWS_IAM
+
   GeminiImageFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -50,6 +57,7 @@ Resources:
         ApiRequest:
           Type: Api
           Properties:
+            RestApiId: !Ref RestApi
             # Expose a POST endpoint so API Gateway can trigger the Lambda with user prompts.
             Path: /generate-image
             Method: post
@@ -58,4 +66,4 @@ Outputs:
   ApiEndpoint:
     Description: API Gateway endpoint to invoke the function.
     # Expose the HTTPS URL created by API Gateway so clients can consume the service.
-    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate-image"
+    Value: !Sub "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/generate-image"

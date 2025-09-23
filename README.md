@@ -81,3 +81,13 @@ The response returns an `images` array with objects containing `mimeType` and `d
 4. SAM builds and deploys the stack, updating or creating the Lambda function and API Gateway endpoint.
 
 After deployment, the `ApiEndpoint` output (available in CloudFormation) exposes the URL to invoke the Lambda over HTTP.
+
+## Calling the API (IAM authentication)
+
+The API Gateway endpoint now requires AWS Signature Version 4 (IAM) authentication. Typical flow:
+
+1. Authenticate the client (for example with Amazon Cognito) and obtain temporary AWS credentials that allow `execute-api:Invoke` on the stack’s API.
+2. In your app (Node.js/React, etc.), sign each request with SigV4 using those credentials. Libraries such as AWS Amplify or the AWS SDK for JavaScript v3 can handle the signing automatically.
+3. Send the signed POST request to `/Prod/generate-image`; unsigned requests will receive `403`.
+
+If you prefer a different authentication mechanism (API keys, Cognito authorizer, etc.), update `template.yaml` accordingly.
