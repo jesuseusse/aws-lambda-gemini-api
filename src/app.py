@@ -13,8 +13,7 @@ import google.generativeai as genai
 
 LOGGER = logging.getLogger(__name__)
 LOGGER.setLevel(logging.INFO)
-
-DEFAULT_MODEL = "gemini-2.5-flash-image-preview" # or gemini-1.5-pro
+DEFAULT_MODEL = "gemini-2.0-flash-preview-image-generation" # or gemini-1.5-pro
 DEFAULT_MIME_TYPE = "image/png"
 
 _SSM_CLIENT = boto3.client("ssm")
@@ -100,19 +99,38 @@ def _build_content_parts(prompt: str, payload: Dict[str, Any]) -> List[Dict[str,
     return parts
 
 
-def _extract_images(result: Any) -> List[ImagePayload]:
+def _get_part_attribute(part: Any, attribute: str) -> Optional[Any]:
+    if hasattr(part, attribute):
+        return getattr(part, attribute)
+    if isinstance(part, dict):
+        return part.get(attribute)
+    return None
+
+
+def _extract_outputs(result: Any) -> Dict[str, Any]:
     images: List[ImagePayload] = []
+    texts: List[str] = []
 
     candidates = getattr(result, "candidates", None) or []
     for candidate in candidates:
         content = getattr(candidate, "content", None)
         parts = getattr(content, "parts", None) or []
         for part in parts:
-            inline_data = getattr(part, "inline_data", None) or getattr(part, "inlineData", None)
+            inline_data = _get_part_attribute(part, "inline_data") or _get_part_attribute(part, "inlineData")
             if inline_data and getattr(inline_data, "data", None):
                 mime = getattr(inline_data, "mime_type", None) or getattr(inline_data, "mimeType", None) or DEFAULT_MIME_TYPE
                 images.append(ImagePayload(mime_type=mime, data=inline_data.data))
-    return images
+
+            text_value = _get_part_attribute(part, "text")
+            if isinstance(text_value, str):
+                stripped = text_value.strip()
+                if stripped:
+                    texts.append(stripped)
+
+    return {
+        "images": images,
+        "texts": texts
+    }
 
 
 def _get_api_key() -> Optional[str]:
@@ -156,14 +174,20 @@ def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, 
 
         result = model.generate_content(**request_kwargs)
 
-        images = _extract_images(result)
-        if not images:
-            LOGGER.error("La respuesta de Gemini no contiene imágenes")
-            return _build_response(502, {"message": "Gemini no generó imágenes para el prompt proporcionado"})
+        outputs = _extract_outputs(result)
+        images = outputs["images"]
+        texts = outputs["texts"]
+
+        if not images and not texts:
+            LOGGER.error("La respuesta de Gemini no contiene contenido utilizable")
+            return _build_response(502, {
+                "message": "Gemini no generó contenido para el prompt proporcionado"
+            })
 
         return _build_response(200, {
             "model": model_name,
-            "images": [image.as_dict() for image in images]
+            "images": [image.as_dict() for image in images],
+            "texts": texts
         })
 
     except BadRequestError as error:

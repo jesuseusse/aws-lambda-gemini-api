@@ -112,6 +112,7 @@ def test_successful_generation_returns_images(app_module, mock_genai, mock_boto3
     assert response["statusCode"] == 200
     assert payload["model"] == app_module.DEFAULT_MODEL
     assert payload["images"] == [{"mimeType": "image/png", "data": "base64img"}]
+    assert payload["texts"] == []
     mock_genai["genai"].configure.assert_called_once_with(api_key="fake-key")
     mock_boto3["boto3"].client.assert_called_once_with("ssm")
     mock_boto3["client"].get_parameter.assert_called_once_with(Name="/prod/key", WithDecryption=True)
@@ -145,6 +146,25 @@ def test_no_images_returns_502(app_module, mock_genai, mock_boto3, monkeypatch):
     response = app_module.lambda_handler(_build_event({"prompt": "Un paisaje"}), None)
 
     assert response["statusCode"] == 502
+
+
+def test_text_only_response_returns_texts(app_module, mock_genai, mock_boto3, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_PARAM", "/prod/key")
+    mock_boto3["client"].get_parameter.return_value = {"Parameter": {"Value": "fake-key"}}
+
+    part = SimpleNamespace(text="Descripcion de la imagen")
+    content = SimpleNamespace(parts=[part])
+    candidate = SimpleNamespace(content=content)
+    result = SimpleNamespace(candidates=[candidate])
+
+    mock_genai["model_instance"].generate_content.return_value = result
+
+    response = app_module.lambda_handler(_build_event({"prompt": "Describe"}), None)
+    payload = json.loads(response["body"])
+
+    assert response["statusCode"] == 200
+    assert payload["images"] == []
+    assert payload["texts"] == ["Descripcion de la imagen"]
 
 
 def test_quota_error_returns_structured_payload(app_module, mock_genai, mock_boto3, monkeypatch):
