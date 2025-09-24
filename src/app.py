@@ -173,10 +173,19 @@ def lambda_handler(event: Optional[Dict[str, Any]], _context: Any) -> Dict[str, 
         LOGGER.exception("Error generando imagen")
         status_code = _derive_status_code_from_exception(error) or 502
         message = str(error)
-        payload: Dict[str, Any] = {"message": message}
+
+        payload: Dict[str, Any] = {
+            "error": "GeminiError",
+            "status": status_code,
+            "message": message
+        }
 
         detail = getattr(error, "details", None)
         if isinstance(detail, str) and detail.strip() and detail.strip() != message:
             payload["detail"] = detail.strip()
+
+        trace_id = getattr(error, "trace_id", None)
+        if isinstance(trace_id, str) and trace_id.strip():
+            payload["traceId"] = trace_id.strip()
 
         return _build_response(status_code, payload)

@@ -145,3 +145,25 @@ def test_no_images_returns_502(app_module, mock_genai, mock_boto3, monkeypatch):
     response = app_module.lambda_handler(_build_event({"prompt": "Un paisaje"}), None)
 
     assert response["statusCode"] == 502
+
+
+def test_quota_error_returns_structured_payload(app_module, mock_genai, mock_boto3, monkeypatch):
+    monkeypatch.setenv("GOOGLE_API_KEY_PARAM", "/prod/key")
+    mock_boto3["client"].get_parameter.return_value = {"Parameter": {"Value": "fake-key"}}
+
+    class QuotaError(Exception):
+        code = 429
+        trace_id = "trace-123"
+
+    mock_genai["model_instance"].generate_content.side_effect = QuotaError("429 quota exceeded")
+
+    response = app_module.lambda_handler(_build_event({"prompt": "Render"}), None)
+    payload = json.loads(response["body"])
+
+    assert response["statusCode"] == 429
+    assert payload == {
+        "error": "GeminiError",
+        "status": 429,
+        "message": "429 quota exceeded",
+        "traceId": "trace-123"
+    }
